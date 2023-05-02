@@ -1,3 +1,3 @@
-import("./index.js").catch((e) => {
+import("./index").catch((e) => {
   console.error("Error importing `index.js`:", e);
 });
