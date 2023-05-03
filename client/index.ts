@@ -1,9 +1,10 @@
 import init, { World, Direction } from "snake_game";
+import { rnd } from "./utils/rnd";
 
 init().then((wasm) => {
   const CELL_SIZE = 20;
   const WORLD_WIDTH = 8;
-  let snakeIdx = Date.now() % (WORLD_WIDTH * WORLD_WIDTH);
+  let snakeIdx = rnd(WORLD_WIDTH * WORLD_WIDTH);
 
   const world = World.new(WORLD_WIDTH, snakeIdx);
   const worldWidth = world.width();
@@ -68,9 +69,24 @@ init().then((wasm) => {
     ctx.stroke();
   }
 
+  function drawReword() {
+    const idx = world.reward_cell();
+
+    if (idx < worldWidth * worldWidth) {
+      const col = idx % worldWidth;
+      const row = Math.floor(idx / worldWidth);
+
+      ctx.fillStyle = "green";
+      ctx.beginPath();
+      ctx.fillRect(col * CELL_SIZE, row * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+      ctx.stroke();
+    }
+  }
+
   function paint() {
     drawWorld();
     drawSnake();
+    drawReword();
   }
 
   function update() {
