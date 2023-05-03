@@ -4,14 +4,16 @@ use wee_alloc::WeeAlloc;
 #[global_allocator]
 static ALLOC: WeeAlloc = WeeAlloc::INIT;
 
-enum Direction {
+#[wasm_bindgen]
+pub enum Direction {
     Right,
     Left,
     Up,
     Down,
 }
 
-struct SnakeCell(usize);
+#[derive(Clone, Copy)]
+pub struct SnakeCell(usize);
 
 struct Snake {
     body: Vec<SnakeCell>,
@@ -19,10 +21,16 @@ struct Snake {
 }
 
 impl Snake {
-    fn new(spawn_index: usize) -> Snake {
+    fn new(spawn_index: usize, size: usize) -> Snake {
+        let mut body: Vec<SnakeCell> = vec![];
+
+        for i in 0..size {
+            body.push(SnakeCell(spawn_index - i));
+        }
+
         Snake {
-            body: vec![SnakeCell(spawn_index)],
-            direction: Direction::Down,
+            body,
+            direction: Direction::Right,
         }
     }
 }
@@ -30,7 +38,9 @@ impl Snake {
 #[wasm_bindgen]
 pub struct World {
     width: usize,
+    size: usize,
     snake: Snake,
+    next_cell: Option<SnakeCell>,
 }
 
 #[wasm_bindgen]
@@ -38,7 +48,9 @@ impl World {
     pub fn new(width: usize, snake_idx: usize) -> World {
         World {
             width,
-            snake: Snake::new(snake_idx),
+            size: width * width,
+            snake: Snake::new(snake_idx, 3),
+            next_cell: None,
         }
     }
 
@@ -46,31 +58,56 @@ impl World {
         self.width
     }
 
-    pub fn get_snake_head_idx(&self) -> usize {
+    pub fn snake_head_idx(&self) -> usize {
         self.snake.body[0].0
     }
 
-    pub fn update(&mut self) {
-        let snake_idx: usize = self.get_snake_head_idx();
-        let (mut col, mut row): (usize, usize) = self.idx_to_cell(snake_idx);
-        (col, row) = match self.snake.direction {
-            Direction::Right => ((col + 1) % self.width, row),
-            Direction::Left => ((col - 1) % self.width, row),
-            Direction::Up => (col, (row - 1) % self.width),
-            Direction::Down => (col, (row + 1) % self.width),
+    pub fn change_snake_dir(&mut self, direction: Direction) {
+        let next_cell: SnakeCell = self.get_next_cell(&direction);
+        if next_cell.0 != self.snake.body[1].0 {
+            self.snake.direction = direction;
+            self.next_cell = Some(next_cell);
+        } else {
+            return;
+        }
+    }
+
+    pub fn snake_length(&self) -> usize {
+        self.snake.body.len()
+    }
+
+    pub fn snake_body(&self) -> *const SnakeCell {
+        self.snake.body.as_ptr()
+    }
+
+    pub fn step(&mut self) {
+        let temp: Vec<SnakeCell> = self.snake.body.clone();
+
+        match self.next_cell {
+            Some(cell) => {
+                self.snake.body[0] = cell;
+                self.next_cell = None;
+            }
+            None => {
+                self.snake.body[0] = self.get_next_cell(&self.snake.direction);
+            }
+        }
+
+        let len: usize = self.snake.body.len();
+
+        for i in 1..len {
+            self.snake.body[i] = SnakeCell(temp[i - 1].0);
+        }
+    }
+
+    fn get_next_cell(&self, direction: &Direction) -> SnakeCell {
+        let snake_idx: usize = self.snake_head_idx();
+        let row: usize = snake_idx / self.width;
+        return match direction {
+            Direction::Right => SnakeCell((row * self.width) + (snake_idx + 1) % self.width),
+            Direction::Left => SnakeCell((row * self.width) + (snake_idx - 1) % self.width),
+            Direction::Up => SnakeCell((snake_idx - self.width) % self.size),
+            Direction::Down => SnakeCell((snake_idx + self.width) % self.size),
         };
-        self.set_snake_head_idx(self.cell_to_idx(col, row));
-    }
-
-    fn set_snake_head_idx(&mut self, idx: usize) {
-        self.snake.body[0].0 = idx;
-    }
-
-    fn idx_to_cell(&self, idx: usize) -> (usize, usize) {
-        (idx % self.width, idx / self.width)
-    }
-
-    fn cell_to_idx(&self, col: usize, row: usize) -> usize {
-        col + (row * self.width)
     }
 }
